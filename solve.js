@@ -140,10 +140,13 @@ export function run(input) {
     // Find the closing quote: a '"' not followed by another '"'.
     let searchFrom = pos + 1;
     let close = -1;
+    // A doubled quote inside means the field is not clean; remember it here
+    // so the check below skips one more indexOf scan over the inner text.
+    let doubled = false;
     for (;;) {
       const q = text.indexOf('"', searchFrom);
       if (q === -1) break;
-      if (text.charCodeAt(q + 1) === 34) { searchFrom = q + 2; continue; }
+      if (text.charCodeAt(q + 1) === 34) { doubled = true; searchFrom = q + 2; continue; }
       close = q;
       break;
     }
@@ -154,11 +157,12 @@ export function run(input) {
       errors.push({ code: 'unterminated_quote', line: recordLine, row: recordRow });
       return readUnquoted('"');
     }
-    // The inner text is clean when it holds no quote, CR or LF.
-    const qi = text.indexOf('"', open + 1);
+    // The inner text is clean when it holds no quote, CR or LF. The quote
+    // part is already known: `doubled` is true exactly when a doubled quote
+    // sits before the closing quote, so no third indexOf scan is needed.
     const ri = text.indexOf('\r', open + 1);
     const ni = text.indexOf('\n', open + 1);
-    const clean = (qi === -1 || qi >= close) && (ri === -1 || ri >= close) && (ni === -1 || ni >= close);
+    const clean = !doubled && (ri === -1 || ri >= close) && (ni === -1 || ni >= close);
     const value = clean ? text.slice(open + 1, close) : buildQuotedValue(open + 1, close);
     pos = close + 1;
     if (pos >= n) return { value, ended: END };
